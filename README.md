@@ -22,7 +22,7 @@ func (c Calc) Multiply(x int, y int) {
 }
 
 func main() {
-        simplecli.Handle(Calc{})
+        simplecli.Handle(&Calc{})
 }
 ```
 
