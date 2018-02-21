@@ -22,6 +22,7 @@ type cliHandler struct {
 	val           reflect.Value
 	prgn          string
 	args          []string
+	opts          map[string]reflect.Value
 	methodsByName map[string]reflect.Value
 }
 
@@ -42,14 +43,42 @@ func (cli *cliHandler) init() {
 		cli.methodsByName[method.Name] = cli.val.MethodByName(method.Name)
 	}
 
-	// Init Args
 	cli.prgn = os.Args[0]
-	cli.args = os.Args[1:]
+	cli.opts = make(map[string]reflect.Value)
+	cli.args = make([]string, 0)
+
+	// Init Args & Options
+	for idx := range os.Args[1:] {
+		arg := os.Args[1+idx]
+
+		if strings.HasPrefix(arg, "--") {
+			optNval := strings.Split(arg[2:], "=")
+
+			opt := optNval[0]
+			val := cli.val.FieldByName(opt)
+			if !val.IsValid() {
+				message := fmt.Sprintf("The option --%s is not a recongized option", opt)
+				cli.helpAndExit(-1, message)
+			}
+
+			if len(optNval) == 1 && val.Kind() == reflect.Bool {
+				cli.opts[opt] = reflect.ValueOf(true)
+			} else if !(len(optNval) == 2 && len(optNval[1]) > 0) {
+				message := fmt.Sprintf("No value passed for option --%s", optNval[0])
+				cli.helpAndExit(-1, message)
+			} else {
+				cli.opts[opt] = cli.parseAs(optNval[1], val.Kind())
+			}
+		} else {
+			cli.args = append(cli.args, arg)
+		}
+	}
+
+	fmt.Println(cli.opts)
+
 	if len(cli.args) <= 0 {
 		cli.helpAndExit(0)
 	}
-
-	// TODO: Init Defaults in the struct
 }
 
 func (cli *cliHandler) handle() {
