@@ -1,7 +1,7 @@
 # SimpleCLI
 The simplest way to handle cli arguments in golang. Inspired by python [Fire](https://github.com/google/python-fire) package. 
 
-## Basic Sample 
+## Basic usage 
 
 ```golang
 package main
@@ -26,7 +26,7 @@ func main() {
 }
 ```
 
-### Example Usage
+### Example CLI usage
 
 ```sh
 thurahlaing @ simplecli > go build calc.go && ./calc
@@ -39,7 +39,7 @@ thurahlaing @ simplecli > go build calc.go && ./calc Add 3 5
 8
 ```
 
-## With flags 
+## Advanced usage (with options / flags) 
 
 ```golang
 package main
@@ -78,7 +78,7 @@ func main() {
 }
 ```
 
-### Example Usage
+### Example CLI usage
 
 ```sh
 thurahlaing @ simplecli > go build main/calc.go && ./calc Add 01 10
