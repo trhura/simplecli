@@ -35,9 +35,28 @@ Usage: ./calc Add (int, int)
 ```
 
 ```sh
-thurahlaing @ simplecli > go build calc.go && ./calc Add 3 5
-8
+thurahlaing @ simplecli > go build main/calc.go && ./calc Divide
+Error:  Divide is not a valid command.
+...
 ```
+
+```sh
+thurahlaing @ simplecli > go build main/calc.go && ./calc Add 3
+Error: Add requires 2 argument(s).
+...
+```
+
+```sh
+thurahlaing @ simplecli > go build main/calc.go && ./calc Add 3 as
+Error: as is not a valid number.
+...
+```
+
+```sh
+thurahlaing @ simplecli > go build main/calc.go && ./calc Add 3 4
+7
+```
+
 
 ## Advanced usage (with options / flags) 
 
