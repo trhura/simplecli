@@ -37,7 +37,7 @@ Usage: ./calc add (int, int)
 
 ```sh
 thurahlaing @ simplecli > go build main/calc.go && ./calc divide
-Error:  Divide is not a valid command.
+Error:  divide is not a valid command.
 ...
 ```
 
