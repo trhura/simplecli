@@ -88,7 +88,7 @@ func (cli *cliHandler) handle() {
 	remainingArgs := cli.args[1:]
 
 	// The first arg has corresponding receiver method on struct.
-	method, ok := cli.methodsByName[firstArg]
+	method, ok := cli.methodsByName[strings.Title(firstArg)]
 	if !ok {
 		message := fmt.Sprintf(" %s is not a valid command.", firstArg)
 		cli.helpAndExit(-1, message)
@@ -152,7 +152,7 @@ func (cli *cliHandler) helpAndExit(exitCode int, messages ...interface{}) {
 
 	cmdDescriptions := make([]string, 0, len(cli.methodsByName))
 	for k, m := range cli.methodsByName {
-		desc := fmt.Sprintf("%s %s", k, m.Type().String()[4:])
+		desc := fmt.Sprintf("%s %s", strings.ToLower(k), m.Type().String()[4:])
 		cmdDescriptions = append(cmdDescriptions, desc)
 	}
 

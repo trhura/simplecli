@@ -1,7 +1,7 @@
 # SimpleCLI
-The simplest way to handle cli arguments in golang. Inspired by python [Fire](https://github.com/google/python-fire) package. 
+The simplest way to handle cli arguments in golang. Inspired by python [Fire](https://github.com/google/python-fire) package.
 
-## Basic usage 
+## Basic usage
 
 ```golang
 package main
@@ -30,35 +30,35 @@ func main() {
 
 ```sh
 thurahlaing @ simplecli > go build calc.go && ./calc
-Usage: ./calc Add (int, int)
-              Multiply (int, int)
+Usage: ./calc add (int, int)
+              multiply (int, int)
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc Divide
+thurahlaing @ simplecli > go build main/calc.go && ./calc divide
 Error:  Divide is not a valid command.
 ...
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc Add 3
-Error: Add requires 2 argument(s).
+thurahlaing @ simplecli > go build main/calc.go && ./calc add 3
+Error: add requires 2 argument(s).
 ...
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc Add 3 as
+thurahlaing @ simplecli > go build main/calc.go && ./calc add 3 as
 Error: as is not a valid number.
 ...
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc Add 3 4
+thurahlaing @ simplecli > go build main/calc.go && ./calc add 3 4
 7
 ```
 
 
-## Advanced usage (with options / flags) 
+## Advanced usage (with options / flags)
 
 ```golang
 package main
@@ -97,19 +97,19 @@ func main() {
 }
 ```
 
-### Example CLI usage
+### Example CLI Usage
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc Add 01 10
+thurahlaing @ simplecli > go build main/calc.go && ./calc add 01 10
 11
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc --verbose Add 01 10
+thurahlaing @ simplecli > go build main/calc.go && ./calc --verbose add 01 10
 1 + 10 = 11
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc --verbose --base=2 Add 01 10
+thurahlaing @ simplecli > go build main/calc.go && ./calc --verbose --base=2 add 01 10
 1 + 2 = 3
 ```
