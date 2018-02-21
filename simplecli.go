@@ -10,6 +10,7 @@ import (
 
 // Handle takes a struct type and call the relevant method of
 // the struct based on the cli arguments passed.
+// any must be a pointer to a struct
 func Handle(any interface{}) {
 	handler := cliHandler{any: any}
 	handler.init()
@@ -26,14 +27,9 @@ type cliHandler struct {
 }
 
 func (cli *cliHandler) init() {
-	// Must be a struct
-	if reflect.ValueOf(cli.any).Kind() != reflect.Struct {
-		panic(fmt.Sprintf("The argument must be a struct, got a %T instead.", cli.any))
-	}
-
 	// Init Fields
 	cli.typ = reflect.TypeOf(cli.any)
-	cli.val = reflect.ValueOf(cli.any)
+	cli.val = reflect.ValueOf(cli.any).Elem()
 	cli.methodsByName = make(map[string]reflect.Value, cli.typ.NumMethod())
 
 	// Init Methods
@@ -53,7 +49,7 @@ func (cli *cliHandler) init() {
 			optNval := strings.Split(arg[2:], "=")
 
 			opt := optNval[0]
-			field := cli.val.FieldByName(opt)
+			field := cli.val.FieldByName(strings.Title(opt))
 			if !field.IsValid() {
 				message := fmt.Sprintf("The option --%s is not a recongized option", opt)
 				cli.helpAndExit(-1, message)
