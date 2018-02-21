@@ -7,8 +7,9 @@ import (
 )
 
 type Calc struct {
-	Base    int // Need to be a public field, so that it is accessible by external package.
-	Verbose bool
+	// Need to be a public field, so that it is accessible by external package.
+	Base    int  `base (radix) of input numbers`
+	Verbose bool `print verbose output`
 }
 
 // Need to be a public method, so that it is accessible by external package.

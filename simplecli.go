@@ -28,7 +28,7 @@ type cliHandler struct {
 
 func (cli *cliHandler) init() {
 	// Init Fields
-	cli.typ = reflect.TypeOf(cli.any)
+	cli.typ = reflect.TypeOf(cli.any).Elem()
 	cli.val = reflect.ValueOf(cli.any).Elem()
 	cli.methodsByName = make(map[string]reflect.Value, cli.typ.NumMethod())
 
@@ -147,17 +147,42 @@ func (cli *cliHandler) helpAndExit(exitCode int, messages ...interface{}) {
 		}
 	}
 
-	prognInfo := fmt.Sprintf("Usage: %s ", cli.prgn)
-	whitespaces := strings.Repeat(" ", len(prognInfo))
+	var prognInfo string
+	hasOptions := cli.val.NumField() > 0
+	if hasOptions {
+		prognInfo = fmt.Sprintf("Usage: %s [options] ", cli.prgn)
+	} else {
+		prognInfo = fmt.Sprintf("Usage: %s ", cli.prgn)
+	}
 
+	whitespaces := strings.Repeat(" ", len(prognInfo))
 	cmdDescriptions := make([]string, 0, len(cli.methodsByName))
 	for k, m := range cli.methodsByName {
 		desc := fmt.Sprintf("%s %s", strings.ToLower(k), m.Type().String()[4:])
 		cmdDescriptions = append(cmdDescriptions, desc)
 	}
 
-	commandsHelp := strings.Join(cmdDescriptions, "\n"+whitespaces)
-	help := prognInfo + commandsHelp
+	cmdHelp := strings.Join(cmdDescriptions, "\n"+whitespaces)
+	help := prognInfo + cmdHelp
+
+	if hasOptions {
+		whitespaces = strings.Repeat(" ", 4)
+		optDescriptions := make([]string, 0, cli.typ.NumField())
+
+		for i := 0; i < cli.typ.NumField(); i++ {
+			desc := fmt.Sprintf(
+				"%s--%-10s %6s   %s",
+				whitespaces,
+				strings.ToLower(cli.typ.Field(i).Name),
+				cli.typ.Field(i).Type,
+				cli.typ.Field(i).Tag,
+			)
+			optDescriptions = append(optDescriptions, desc)
+		}
+
+		optHelp := strings.Join(optDescriptions, "\n")
+		help = help + "\nOptions:\n" + optHelp
+	}
 
 	fmt.Println(help)
 	os.Exit(exitCode)

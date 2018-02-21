@@ -72,10 +72,11 @@ import (
 
 type Calc struct {
 	// Need to be a public field, so that it is accessible by external package.
-	Base    int
-	Verbose bool
+	Base    int  `base (radix) of input numbers`
+	Verbose bool `print verbose output`
 }
 
+// Need to be a public method, so that it is accessible by external package.
 func (c Calc) Add(x int, y int) {
 	xb, _ := strconv.ParseInt(strconv.Itoa(x), c.Base, 32)
 	yb, _ := strconv.ParseInt(strconv.Itoa(y), c.Base, 32)
@@ -101,6 +102,15 @@ func main() {
 ```
 
 ### Example CLI Usage
+
+```sh
+thurahlaing @ simplecli > go build examples/calc.go && ./calc
+Usage: ./calc [options] add (int, int)
+                        multiply (int, int)
+Options:
+    --base          int   base (radix) of input numbers
+    --verbose      bool   print verbose output
+```
 
 ```sh
 thurahlaing @ simplecli > go build main/calc.go && ./calc add 01 10
