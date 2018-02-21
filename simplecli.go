@@ -46,8 +46,7 @@ func (cli *cliHandler) init() {
 	cli.prgn = os.Args[0]
 	cli.args = os.Args[1:]
 	if len(cli.args) <= 0 {
-		cli.printHelp()
-		os.Exit(0)
+		cli.helpAndExit(0)
 	}
 
 	// TODO: Init Defaults in the struct
@@ -61,27 +60,29 @@ func (cli *cliHandler) handle() {
 	// The first arg has corresponding receiver method on struct.
 	method, ok := cli.methodsByName[firstArg]
 	if !ok {
-		errMsg := fmt.Sprintf("Illegal command -- %s.", firstArg)
-		panic(errMsg)
+		message := fmt.Sprintf(" %s is not a valid command.", firstArg)
+		cli.helpAndExit(-1, message)
 	}
 
 	// The remaining arg types / len align with receiver method params on struct.
 	methodType := method.Type()
 	methodArgs := make([]reflect.Value, methodType.NumIn())
 	if len(remainingArgs) != len(methodArgs) {
-		errMsg := fmt.Sprintf("Illegal options -- %s takes %d argument(s).", firstArg, methodType.NumIn())
-		panic(errMsg)
+		message := fmt.Sprintf("%s requires %d argument(s).",
+			firstArg,
+			methodType.NumIn())
+		cli.helpAndExit(-1, message)
 	}
 
 	for i := 0; i < methodType.NumIn(); i++ {
 		argI := methodType.In(i)
-		methodArgs[i] = parseAs(remainingArgs[i], argI.Kind())
+		methodArgs[i] = cli.parseAs(remainingArgs[i], argI.Kind())
 	}
 
 	method.Call(methodArgs)
 }
 
-func parseAs(val string, kind reflect.Kind) reflect.Value {
+func (cli *cliHandler) parseAs(val string, kind reflect.Kind) reflect.Value {
 	switch kind {
 	case reflect.String:
 		return reflect.ValueOf(val)
@@ -89,25 +90,33 @@ func parseAs(val string, kind reflect.Kind) reflect.Value {
 	case reflect.Int:
 		num, err := strconv.ParseInt(val, 10, 32)
 		if err != nil {
-			errMsg := fmt.Sprintf("Illegal arg --  %s is not a valid int.", val)
-			panic(errMsg)
+			message := fmt.Sprintf("%s is not a valid number.", val)
+			cli.helpAndExit(-1, message)
 		}
 		return reflect.ValueOf(int(num))
 
 	case reflect.Bool:
 		bool, err := strconv.ParseBool(val)
 		if err != nil {
-			errMsg := fmt.Sprintf("Illegal arg --  %s is not a valid bool.", val)
-			panic(errMsg)
+			message := fmt.Sprintf("%s is not a valid bool.", val)
+			cli.helpAndExit(-1, message)
 		}
 		return reflect.ValueOf(bool)
 	default:
-		errMsg := fmt.Sprintf("Illegal arg -- argument type %s is not supported.", kind)
-		panic(errMsg)
+		message := fmt.Sprintf("Argument type %s is not supported yet.", kind)
+		cli.helpAndExit(-1, message)
+		return reflect.ValueOf(nil)
 	}
 }
 
-func (cli *cliHandler) printHelp() {
+func (cli *cliHandler) helpAndExit(exitCode int, messages ...interface{}) {
+	for index := range messages {
+		_, err := fmt.Fprintf(os.Stderr, "Error: %s\n", messages[index])
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	prognInfo := fmt.Sprintf("Usage: %s ", cli.prgn)
 	whitespaces := strings.Repeat(" ", len(prognInfo))
 
@@ -117,7 +126,9 @@ func (cli *cliHandler) printHelp() {
 		cmdDescriptions = append(cmdDescriptions, desc)
 	}
 
-	commandsHelp := strings.Join(cmdDescriptions, " |\n"+whitespaces)
+	commandsHelp := strings.Join(cmdDescriptions, "\n"+whitespaces)
 	help := prognInfo + commandsHelp
+
 	fmt.Println(help)
+	os.Exit(exitCode)
 }
