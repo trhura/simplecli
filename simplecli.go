@@ -22,7 +22,6 @@ type cliHandler struct {
 	val           reflect.Value
 	prgn          string
 	args          []string
-	opts          map[string]reflect.Value
 	methodsByName map[string]reflect.Value
 }
 
@@ -44,7 +43,6 @@ func (cli *cliHandler) init() {
 	}
 
 	cli.prgn = os.Args[0]
-	cli.opts = make(map[string]reflect.Value)
 	cli.args = make([]string, 0)
 
 	// Init Args & Options
@@ -55,26 +53,33 @@ func (cli *cliHandler) init() {
 			optNval := strings.Split(arg[2:], "=")
 
 			opt := optNval[0]
-			val := cli.val.FieldByName(opt)
-			if !val.IsValid() {
+			field := cli.val.FieldByName(opt)
+			if !field.IsValid() {
 				message := fmt.Sprintf("The option --%s is not a recongized option", opt)
 				cli.helpAndExit(-1, message)
 			}
 
-			if len(optNval) == 1 && val.Kind() == reflect.Bool {
-				cli.opts[opt] = reflect.ValueOf(true)
-			} else if !(len(optNval) == 2 && len(optNval[1]) > 0) {
-				message := fmt.Sprintf("No value passed for option --%s", optNval[0])
-				cli.helpAndExit(-1, message)
+			if field.Kind() == reflect.Bool {
+				if len(optNval) == 2 {
+					val := cli.parseAs(optNval[1], field.Kind())
+					field.SetBool(val.Bool())
+				} else {
+					field.SetBool(true)
+				}
 			} else {
-				cli.opts[opt] = cli.parseAs(optNval[1], val.Kind())
+				if len(optNval) == 2 && len(optNval[1]) > 0 {
+					val := cli.parseAs(optNval[1], field.Kind())
+					field.Set(val)
+				} else {
+					message := fmt.Sprintf("No value passed for option --%s", optNval[0])
+					cli.helpAndExit(-1, message)
+				}
 			}
+
 		} else {
 			cli.args = append(cli.args, arg)
 		}
 	}
-
-	fmt.Println(cli.opts)
 
 	if len(cli.args) <= 0 {
 		cli.helpAndExit(0)
