@@ -13,6 +13,7 @@ import (
 
 type Calc struct{}
 
+// Need to be a public method, so that it is accessible by external package.
 func (c Calc) Add(x int, y int) {
         fmt.Println(x + y)
 }
@@ -70,6 +71,7 @@ import (
 )
 
 type Calc struct {
+	// Need to be a public field, so that it is accessible by external package.
 	Base    int
 	Verbose bool
 }
@@ -93,6 +95,7 @@ func (c Calc) Multiply(x int, y int) {
 }
 
 func main() {
+	// Needs to pass a pointer to struct, so it can be modified.
 	simplecli.Handle(&Calc{Base: 10, Verbose: false})
 }
 ```
