@@ -28,6 +28,7 @@ type CommandGroup struct {
 	MainCommand      interface{}
 	CommandArgs      []string
 	SubcommandByName map[string]reflect.Value
+	SubCommandGroups []*CommandGroup
 }
 
 func (cmd *CommandGroup) init(commandArgs []string) {
@@ -42,9 +43,8 @@ func (cmd *CommandGroup) init(commandArgs []string) {
 		cmd.SubcommandByName[method.Name] = val.MethodByName(method.Name)
 	}
 
-	// Initialize arguments
+	// Initialize arguments and options
 	cmd.CommandArgs = make([]string, 0)
-
 	for i := range commandArgs {
 		arg := commandArgs[i]
 
@@ -53,18 +53,17 @@ func (cmd *CommandGroup) init(commandArgs []string) {
 			option := arg[len(OptionPrefix):]
 			cmd.parseOption(option)
 		} else {
+			// TODO: add support for SubCommandGroups
 			cmd.CommandArgs = append(cmd.CommandArgs, arg)
 		}
-	}
-
-	if len(cmd.CommandArgs) <= 0 {
-		cmd.helpAndExit(0)
 	}
 }
 
 func (cmd *CommandGroup) parseOption(option string) {
-	val := reflect.ValueOf(cmd.MainCommand).Elem()
+	var field reflect.Value
+	var val = reflect.ValueOf(cmd.MainCommand).Elem()
 
+	// Parse option=value from string
 	option, value := func() (string, string) {
 		items := strings.Split(option, "=")
 		if len(items) == 1 {
@@ -74,28 +73,36 @@ func (cmd *CommandGroup) parseOption(option string) {
 		return items[0], items[1]
 	}()
 
-	var field reflect.Value
+	// Make sure there is a struct field with same name as `option``
 	if field = val.FieldByName(strings.Title(option)); !field.IsValid() {
 		message := fmt.Sprintf("The option --%s is not a recongized option", option)
 		cmd.helpAndExit(-1, message)
 	}
 
+	// If there is a value passed, parse and set struct field
 	if value != "" {
-		// If there is a value passed with `=`
 		parsedValue := cmd.parseAs(value, field.Kind())
 		field.Set(parsedValue)
-	} else {
-		// If not value passed store true for bool, raise error other types
-		if field.Kind() == reflect.Bool {
-			field.SetBool(true)
-		} else {
-			message := fmt.Sprintf("No value passed for option --%s", option)
-			cmd.helpAndExit(-1, message)
-		}
+		return
 	}
+
+	// If no value passed, but for bool fields store true
+	if field.Kind() == reflect.Bool {
+		field.SetBool(true)
+		return
+	}
+
+	// Raise error for non-Bool types if no value passed
+	message := fmt.Sprintf("No value passed for option --%s", option)
+	cmd.helpAndExit(-1, message)
 }
 
 func (cmd *CommandGroup) handle() {
+	// No arguments passed
+	if len(cmd.CommandArgs) <= 0 {
+		cmd.helpAndExit(0)
+	}
+
 	// parse Args
 	firstArg := cmd.CommandArgs[0]
 	remainingArgs := cmd.CommandArgs[1:]
