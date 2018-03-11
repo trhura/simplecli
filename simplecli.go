@@ -19,6 +19,8 @@ const OptionPrefix = `--`
 // based on the declared fields & methods of the specified struct.
 func Handle(cmd interface{}) {
 	grp := NewCommandGroup(cmd, programName, programArgs)
+	defer grp.gracefulExit()
+
 	grp.handle()
 }
 
@@ -36,7 +38,9 @@ func NewCommandGroup(cmd interface{}, commandName string, commandArgs []string) 
 	// Fixme: raise error if not pointer to struct
 	typ := reflect.TypeOf(cmd).Elem()
 	val := reflect.ValueOf(cmd).Elem()
+
 	grp := CommandGroup{MainCommand: cmd}
+	defer grp.gracefulExit()
 
 	// Initialize subcommands with declared methods of cmd.MainCommand struct
 	grp.SubcommandByName = make(map[string]reflect.Value, typ.NumMethod())
@@ -65,6 +69,14 @@ func NewCommandGroup(cmd interface{}, commandName string, commandArgs []string) 
 	return &grp
 }
 
+func (grp *CommandGroup) gracefulExit() {
+	if r := recover(); r != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", r)
+		fmt.Fprintln(os.Stdout, grp.getHelp())
+		os.Exit(-1)
+	}
+}
+
 func (grp *CommandGroup) parseOption(option string) {
 	var field reflect.Value
 	var val = reflect.ValueOf(grp.MainCommand).Elem()
@@ -82,7 +94,7 @@ func (grp *CommandGroup) parseOption(option string) {
 	// Make sure there is a struct field with same name as `option`
 	if field = val.FieldByName(strings.Title(option)); !field.IsValid() {
 		message := fmt.Sprintf("The option --%s is not a recongized option", option)
-		grp.exitWith(message)
+		panic(message)
 	}
 
 	// If there is a value passed, parse and set struct field
@@ -100,14 +112,16 @@ func (grp *CommandGroup) parseOption(option string) {
 
 	// Raise error for non-Bool types if no value passed
 	message := fmt.Sprintf("No value passed for option --%s", option)
-	grp.exitWith(message)
+	panic(message)
 }
 
 func (grp *CommandGroup) handle() {
+	defer grp.gracefulExit()
+
 	// if no arguments passed
 	if len(grp.CommandArgs) <= 0 {
 		message := fmt.Sprintf("No arguments passed for %s", grp.CommandName)
-		grp.exitWith(message)
+		panic(message)
 	}
 
 	subCommand := grp.CommandArgs[0]
@@ -117,7 +131,7 @@ func (grp *CommandGroup) handle() {
 	method, ok := grp.SubcommandByName[strings.Title(subCommand)]
 	if !ok {
 		message := fmt.Sprintf(" %s is not a valid command.", subCommand)
-		grp.exitWith(message)
+		panic(message)
 	}
 
 	// The remaining arg types / len align with receiver method params on struct.
@@ -128,7 +142,7 @@ func (grp *CommandGroup) handle() {
 		message := fmt.Sprintf("%s requires %d argument(s).",
 			subCommand,
 			methodType.NumIn())
-		grp.exitWith(message)
+		panic(message)
 	}
 
 	for i := 0; i < methodType.NumIn(); i++ {
@@ -149,7 +163,7 @@ func (grp *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
 		num, err := strconv.ParseInt(val, 10, 32)
 		if err != nil {
 			message := fmt.Sprintf("%s is not a valid number.", val)
-			grp.exitWith(message)
+			panic(message)
 		}
 		return reflect.ValueOf(int(num))
 
@@ -157,25 +171,14 @@ func (grp *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
 		bool, err := strconv.ParseBool(val)
 		if err != nil {
 			message := fmt.Sprintf("%s is not a valid bool.", val)
-			grp.exitWith(message)
+			panic(message)
 		}
 		return reflect.ValueOf(bool)
 
 	default:
 		message := fmt.Sprintf("Argument type %s is currently not supported yet.", kind)
-		grp.exitWith(message)
-		return reflect.ValueOf(nil)
+		panic(message)
 	}
-}
-
-func (grp *CommandGroup) exitWith(message string) {
-	_, err := fmt.Fprintf(os.Stderr, "Error: %s\n", message)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Fprintln(os.Stdout, grp.getHelp())
-	os.Exit(-1)
 }
 
 func (grp *CommandGroup) getHelp() string {
