@@ -12,6 +12,9 @@ import (
 var programName = os.Args[0]
 var programArgs = os.Args[1:]
 
+// OptionPrefix constant
+const OptionPrefix = `--`
+
 // Handle takes a point to a struct and construct a CommandGroup,
 // based on the declared fields & methods of the specified struct.
 func Handle(ptr interface{}) {
@@ -45,33 +48,10 @@ func (cmd *CommandGroup) init(commandArgs []string) {
 	for i := range commandArgs {
 		arg := commandArgs[i]
 
-		if strings.HasPrefix(arg, "--") {
-			optNval := strings.Split(arg[2:], "=")
-
-			opt := optNval[0]
-			field := val.FieldByName(strings.Title(opt))
-			if !field.IsValid() {
-				message := fmt.Sprintf("The option --%s is not a recongized option", opt)
-				cmd.helpAndExit(-1, message)
-			}
-
-			if field.Kind() == reflect.Bool {
-				if len(optNval) == 2 {
-					val := cmd.parseAs(optNval[1], field.Kind())
-					field.SetBool(val.Bool())
-				} else {
-					field.SetBool(true)
-				}
-			} else {
-				if len(optNval) == 2 && len(optNval[1]) > 0 {
-					val := cmd.parseAs(optNval[1], field.Kind())
-					field.Set(val)
-				} else {
-					message := fmt.Sprintf("No value passed for option --%s", optNval[0])
-					cmd.helpAndExit(-1, message)
-				}
-			}
-
+		if strings.HasPrefix(arg, OptionPrefix) {
+			// If the argument starts with OptionPrefix, parse as option.
+			option := arg[len(OptionPrefix):]
+			cmd.parseOption(option)
 		} else {
 			cmd.CommandArgs = append(cmd.CommandArgs, arg)
 		}
@@ -79,6 +59,35 @@ func (cmd *CommandGroup) init(commandArgs []string) {
 
 	if len(cmd.CommandArgs) <= 0 {
 		cmd.helpAndExit(0)
+	}
+}
+
+func (cmd *CommandGroup) parseOption(option string) {
+	val := reflect.ValueOf(cmd.MainCommand).Elem()
+	optNval := strings.Split(option, "=")
+
+	opt := optNval[0]
+	field := val.FieldByName(strings.Title(opt))
+	if !field.IsValid() {
+		message := fmt.Sprintf("The option --%s is not a recongized option", opt)
+		cmd.helpAndExit(-1, message)
+	}
+
+	if field.Kind() == reflect.Bool {
+		if len(optNval) == 2 {
+			val := cmd.parseAs(optNval[1], field.Kind())
+			field.SetBool(val.Bool())
+		} else {
+			field.SetBool(true)
+		}
+	} else {
+		if len(optNval) == 2 && len(optNval[1]) > 0 {
+			val := cmd.parseAs(optNval[1], field.Kind())
+			field.Set(val)
+		} else {
+			message := fmt.Sprintf("No value passed for option --%s", optNval[0])
+			cmd.helpAndExit(-1, message)
+		}
 	}
 }
 
