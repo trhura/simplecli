@@ -49,7 +49,7 @@ func (cmd *CommandGroup) init(commandArgs []string) {
 		arg := commandArgs[i]
 
 		if strings.HasPrefix(arg, OptionPrefix) {
-			// If the argument starts with OptionPrefix, parse as option.
+			// If the argument starts with `--`, parse it as option.
 			option := arg[len(OptionPrefix):]
 			cmd.parseOption(option)
 		} else {
@@ -64,28 +64,32 @@ func (cmd *CommandGroup) init(commandArgs []string) {
 
 func (cmd *CommandGroup) parseOption(option string) {
 	val := reflect.ValueOf(cmd.MainCommand).Elem()
-	optNval := strings.Split(option, "=")
 
-	opt := optNval[0]
-	field := val.FieldByName(strings.Title(opt))
-	if !field.IsValid() {
-		message := fmt.Sprintf("The option --%s is not a recongized option", opt)
+	option, value := func() (string, string) {
+		items := strings.Split(option, "=")
+		if len(items) == 1 {
+			return items[0], ""
+		}
+
+		return items[0], items[1]
+	}()
+
+	var field reflect.Value
+	if field = val.FieldByName(strings.Title(option)); !field.IsValid() {
+		message := fmt.Sprintf("The option --%s is not a recongized option", option)
 		cmd.helpAndExit(-1, message)
 	}
 
-	if field.Kind() == reflect.Bool {
-		if len(optNval) == 2 {
-			val := cmd.parseAs(optNval[1], field.Kind())
-			field.SetBool(val.Bool())
-		} else {
-			field.SetBool(true)
-		}
+	if value != "" {
+		// If there is a value passed with `=`
+		parsedValue := cmd.parseAs(value, field.Kind())
+		field.Set(parsedValue)
 	} else {
-		if len(optNval) == 2 && len(optNval[1]) > 0 {
-			val := cmd.parseAs(optNval[1], field.Kind())
-			field.Set(val)
+		// If not value passed store true for bool, raise error other types
+		if field.Kind() == reflect.Bool {
+			field.SetBool(true)
 		} else {
-			message := fmt.Sprintf("No value passed for option --%s", optNval[0])
+			message := fmt.Sprintf("No value passed for option --%s", option)
 			cmd.helpAndExit(-1, message)
 		}
 	}
