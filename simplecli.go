@@ -17,11 +17,9 @@ const OptionPrefix = `--`
 
 // Handle takes a point to a struct and construct a CommandGroup,
 // based on the declared fields & methods of the specified struct.
-func Handle(ptr interface{}) {
-	handler := CommandGroup{MainCommand: ptr}
-
-	handler.init(programName, programArgs)
-	handler.handle()
+func Handle(cmd interface{}) {
+	grp := NewCommandGroup(cmd, programName, programArgs)
+	grp.handle()
 }
 
 // CommandGroup group commands
@@ -33,21 +31,23 @@ type CommandGroup struct {
 	SubCommandGroups []*CommandGroup
 }
 
-func (cmd *CommandGroup) init(commandName string, commandArgs []string) {
+// NewCommandGroup constructs a new command group from a struct
+func NewCommandGroup(cmd interface{}, commandName string, commandArgs []string) *CommandGroup {
 	// Fixme: raise error if not pointer to struct
-	typ := reflect.TypeOf(cmd.MainCommand).Elem()
-	val := reflect.ValueOf(cmd.MainCommand).Elem()
+	typ := reflect.TypeOf(cmd).Elem()
+	val := reflect.ValueOf(cmd).Elem()
+	grp := CommandGroup{MainCommand: cmd}
 
 	// Initialize subcommands with declared methods of cmd.MainCommand struct
-	cmd.SubcommandByName = make(map[string]reflect.Value, typ.NumMethod())
+	grp.SubcommandByName = make(map[string]reflect.Value, typ.NumMethod())
 	for i := 0; i < typ.NumMethod(); i++ {
 		method := typ.Method(i)
-		cmd.SubcommandByName[method.Name] = val.MethodByName(method.Name)
+		grp.SubcommandByName[method.Name] = val.MethodByName(method.Name)
 	}
 
 	// Initialize arguments and options
-	cmd.CommandName = commandName
-	cmd.CommandArgs = make([]string, 0)
+	grp.CommandName = commandName
+	grp.CommandArgs = make([]string, 0)
 
 	for i := range commandArgs {
 		arg := commandArgs[i]
@@ -55,17 +55,19 @@ func (cmd *CommandGroup) init(commandName string, commandArgs []string) {
 		if strings.HasPrefix(arg, OptionPrefix) {
 			// If the argument starts with `--`, parse it as option.
 			option := arg[len(OptionPrefix):]
-			cmd.parseOption(option)
+			grp.parseOption(option)
 		} else {
 			// TODO: add support for SubCommandGroups
-			cmd.CommandArgs = append(cmd.CommandArgs, arg)
+			grp.CommandArgs = append(grp.CommandArgs, arg)
 		}
 	}
+
+	return &grp
 }
 
-func (cmd *CommandGroup) parseOption(option string) {
+func (grp *CommandGroup) parseOption(option string) {
 	var field reflect.Value
-	var val = reflect.ValueOf(cmd.MainCommand).Elem()
+	var val = reflect.ValueOf(grp.MainCommand).Elem()
 
 	// Parse option=value from string
 	option, value := func() (string, string) {
@@ -80,12 +82,12 @@ func (cmd *CommandGroup) parseOption(option string) {
 	// Make sure there is a struct field with same name as `option`
 	if field = val.FieldByName(strings.Title(option)); !field.IsValid() {
 		message := fmt.Sprintf("The option --%s is not a recongized option", option)
-		cmd.helpAndExit(-1, message)
+		grp.exitWith(message)
 	}
 
 	// If there is a value passed, parse and set struct field
 	if value != "" {
-		parsedValue := cmd.parseAs(value, field.Kind())
+		parsedValue := grp.parseAs(value, field.Kind())
 		field.Set(parsedValue)
 		return
 	}
@@ -98,24 +100,24 @@ func (cmd *CommandGroup) parseOption(option string) {
 
 	// Raise error for non-Bool types if no value passed
 	message := fmt.Sprintf("No value passed for option --%s", option)
-	cmd.helpAndExit(-1, message)
+	grp.exitWith(message)
 }
 
-func (cmd *CommandGroup) handle() {
+func (grp *CommandGroup) handle() {
 	// if no arguments passed
-	if len(cmd.CommandArgs) <= 0 {
-		message := fmt.Sprintf("No arguments passed for %s", cmd.CommandName)
-		cmd.helpAndExit(-1, message)
+	if len(grp.CommandArgs) <= 0 {
+		message := fmt.Sprintf("No arguments passed for %s", grp.CommandName)
+		grp.exitWith(message)
 	}
 
-	subCommand := cmd.CommandArgs[0]
-	commandArgs := cmd.CommandArgs[1:]
+	subCommand := grp.CommandArgs[0]
+	commandArgs := grp.CommandArgs[1:]
 
 	// Check whether there is corresponding receiver method for subCommand
-	method, ok := cmd.SubcommandByName[strings.Title(subCommand)]
+	method, ok := grp.SubcommandByName[strings.Title(subCommand)]
 	if !ok {
 		message := fmt.Sprintf(" %s is not a valid command.", subCommand)
-		cmd.helpAndExit(-1, message)
+		grp.exitWith(message)
 	}
 
 	// The remaining arg types / len align with receiver method params on struct.
@@ -126,18 +128,18 @@ func (cmd *CommandGroup) handle() {
 		message := fmt.Sprintf("%s requires %d argument(s).",
 			subCommand,
 			methodType.NumIn())
-		cmd.helpAndExit(-1, message)
+		grp.exitWith(message)
 	}
 
 	for i := 0; i < methodType.NumIn(); i++ {
 		argI := methodType.In(i)
-		methodArgs[i] = cmd.parseAs(commandArgs[i], argI.Kind())
+		methodArgs[i] = grp.parseAs(commandArgs[i], argI.Kind())
 	}
 
 	method.Call(methodArgs)
 }
 
-func (cmd *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
+func (grp *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
 	switch kind {
 
 	case reflect.String:
@@ -147,7 +149,7 @@ func (cmd *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
 		num, err := strconv.ParseInt(val, 10, 32)
 		if err != nil {
 			message := fmt.Sprintf("%s is not a valid number.", val)
-			cmd.helpAndExit(-1, message)
+			grp.exitWith(message)
 		}
 		return reflect.ValueOf(int(num))
 
@@ -155,27 +157,30 @@ func (cmd *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
 		bool, err := strconv.ParseBool(val)
 		if err != nil {
 			message := fmt.Sprintf("%s is not a valid bool.", val)
-			cmd.helpAndExit(-1, message)
+			grp.exitWith(message)
 		}
 		return reflect.ValueOf(bool)
 
 	default:
 		message := fmt.Sprintf("Argument type %s is currently not supported yet.", kind)
-		cmd.helpAndExit(-1, message)
+		grp.exitWith(message)
 		return reflect.ValueOf(nil)
 	}
 }
 
-func (cmd *CommandGroup) helpAndExit(exitCode int, messages ...interface{}) {
-	typ := reflect.TypeOf(cmd.MainCommand).Elem()
-	val := reflect.ValueOf(cmd.MainCommand).Elem()
-
-	for index := range messages {
-		_, err := fmt.Fprintf(os.Stderr, "Error: %s\n", messages[index])
-		if err != nil {
-			panic(err)
-		}
+func (grp *CommandGroup) exitWith(message string) {
+	_, err := fmt.Fprintf(os.Stderr, "Error: %s\n", message)
+	if err != nil {
+		panic(err)
 	}
+
+	fmt.Fprintln(os.Stdout, grp.getHelp())
+	os.Exit(-1)
+}
+
+func (grp *CommandGroup) getHelp() string {
+	typ := reflect.TypeOf(grp.MainCommand).Elem()
+	val := reflect.ValueOf(grp.MainCommand).Elem()
 
 	var prognInfo string
 	hasOptions := val.NumField() > 0
@@ -186,8 +191,8 @@ func (cmd *CommandGroup) helpAndExit(exitCode int, messages ...interface{}) {
 	}
 
 	whitespaces := strings.Repeat(" ", len(prognInfo))
-	cmdDescriptions := make([]string, 0, len(cmd.SubcommandByName))
-	for k, m := range cmd.SubcommandByName {
+	cmdDescriptions := make([]string, 0, len(grp.SubcommandByName))
+	for k, m := range grp.SubcommandByName {
 		args := m.Type().String()
 		desc := fmt.Sprintf("%s %s", strings.ToLower(k), args[4:])
 		cmdDescriptions = append(cmdDescriptions, desc)
@@ -215,6 +220,5 @@ func (cmd *CommandGroup) helpAndExit(exitCode int, messages ...interface{}) {
 		help = help + "\nOptions:\n" + optHelp
 	}
 
-	fmt.Println(help)
-	os.Exit(exitCode)
+	return help
 }
