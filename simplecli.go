@@ -8,13 +8,15 @@ import (
 	"strings"
 )
 
+// THE program name
 var programName = os.Args[0]
+var programArgs = os.Args[1:]
 
 // Handle takes a point to a struct and construct a CommandGroup,
 // based on the declared fields & methods of the specified struct.
 func Handle(ptr interface{}) {
 	handler := CommandGroup{MainCommand: ptr}
-	handler.init()
+	handler.init(programArgs)
 	handler.handle()
 }
 
@@ -25,23 +27,23 @@ type CommandGroup struct {
 	SubcommandByName map[string]reflect.Value
 }
 
-func (cmd *CommandGroup) init() {
+func (cmd *CommandGroup) init(commandArgs []string) {
 	// Fixme: raise error if not pointer to struct
 	typ := reflect.TypeOf(cmd.MainCommand).Elem()
 	val := reflect.ValueOf(cmd.MainCommand).Elem()
 
-	// Initialize subcommands with
+	// Initialize subcommands with declared methods of cmd.MainCommand struct
 	cmd.SubcommandByName = make(map[string]reflect.Value, typ.NumMethod())
 	for i := 0; i < typ.NumMethod(); i++ {
 		method := typ.Method(i)
 		cmd.SubcommandByName[method.Name] = val.MethodByName(method.Name)
 	}
 
+	// Initialize arguments
 	cmd.CommandArgs = make([]string, 0)
 
-	// Init Args & Options
-	for idx := range os.Args[1:] {
-		arg := os.Args[1+idx]
+	for i := range commandArgs {
+		arg := commandArgs[i]
 
 		if strings.HasPrefix(arg, "--") {
 			optNval := strings.Split(arg[2:], "=")
