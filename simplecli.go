@@ -19,19 +19,21 @@ const OptionPrefix = `--`
 // based on the declared fields & methods of the specified struct.
 func Handle(ptr interface{}) {
 	handler := CommandGroup{MainCommand: ptr}
-	handler.init(programArgs)
+
+	handler.init(programName, programArgs)
 	handler.handle()
 }
 
 // CommandGroup group commands
 type CommandGroup struct {
 	MainCommand      interface{}
+	CommandName      string
 	CommandArgs      []string
 	SubcommandByName map[string]reflect.Value
 	SubCommandGroups []*CommandGroup
 }
 
-func (cmd *CommandGroup) init(commandArgs []string) {
+func (cmd *CommandGroup) init(commandName string, commandArgs []string) {
 	// Fixme: raise error if not pointer to struct
 	typ := reflect.TypeOf(cmd.MainCommand).Elem()
 	val := reflect.ValueOf(cmd.MainCommand).Elem()
@@ -44,7 +46,9 @@ func (cmd *CommandGroup) init(commandArgs []string) {
 	}
 
 	// Initialize arguments and options
+	cmd.CommandName = commandName
 	cmd.CommandArgs = make([]string, 0)
+
 	for i := range commandArgs {
 		arg := commandArgs[i]
 
@@ -73,7 +77,7 @@ func (cmd *CommandGroup) parseOption(option string) {
 		return items[0], items[1]
 	}()
 
-	// Make sure there is a struct field with same name as `option``
+	// Make sure there is a struct field with same name as `option`
 	if field = val.FieldByName(strings.Title(option)); !field.IsValid() {
 		message := fmt.Sprintf("The option --%s is not a recongized option", option)
 		cmd.helpAndExit(-1, message)
@@ -98,35 +102,36 @@ func (cmd *CommandGroup) parseOption(option string) {
 }
 
 func (cmd *CommandGroup) handle() {
-	// No arguments passed
+	// if no arguments passed
 	if len(cmd.CommandArgs) <= 0 {
-		cmd.helpAndExit(0)
+		message := fmt.Sprintf("No arguments passed for %s", cmd.CommandName)
+		cmd.helpAndExit(-1, message)
 	}
 
-	// parse Args
-	firstArg := cmd.CommandArgs[0]
-	remainingArgs := cmd.CommandArgs[1:]
+	subCommand := cmd.CommandArgs[0]
+	commandArgs := cmd.CommandArgs[1:]
 
-	// The first arg has corresponding receiver method on struct.
-	method, ok := cmd.SubcommandByName[strings.Title(firstArg)]
+	// Check whether there is corresponding receiver method for subCommand
+	method, ok := cmd.SubcommandByName[strings.Title(subCommand)]
 	if !ok {
-		message := fmt.Sprintf(" %s is not a valid command.", firstArg)
+		message := fmt.Sprintf(" %s is not a valid command.", subCommand)
 		cmd.helpAndExit(-1, message)
 	}
 
 	// The remaining arg types / len align with receiver method params on struct.
 	methodType := method.Type()
 	methodArgs := make([]reflect.Value, methodType.NumIn())
-	if len(remainingArgs) != len(methodArgs) {
+
+	if len(commandArgs) != len(methodArgs) {
 		message := fmt.Sprintf("%s requires %d argument(s).",
-			firstArg,
+			subCommand,
 			methodType.NumIn())
 		cmd.helpAndExit(-1, message)
 	}
 
 	for i := 0; i < methodType.NumIn(); i++ {
 		argI := methodType.In(i)
-		methodArgs[i] = cmd.parseAs(remainingArgs[i], argI.Kind())
+		methodArgs[i] = cmd.parseAs(commandArgs[i], argI.Kind())
 	}
 
 	method.Call(methodArgs)
@@ -134,6 +139,7 @@ func (cmd *CommandGroup) handle() {
 
 func (cmd *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
 	switch kind {
+
 	case reflect.String:
 		return reflect.ValueOf(val)
 
@@ -152,8 +158,9 @@ func (cmd *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
 			cmd.helpAndExit(-1, message)
 		}
 		return reflect.ValueOf(bool)
+
 	default:
-		message := fmt.Sprintf("Argument type %s is not supported yet.", kind)
+		message := fmt.Sprintf("Argument type %s is currently not supported yet.", kind)
 		cmd.helpAndExit(-1, message)
 		return reflect.ValueOf(nil)
 	}
