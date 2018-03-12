@@ -1,6 +1,10 @@
 # SimpleCLI
 The simplest way to handle cli arguments in golang. Inspired by python [Fire](https://github.com/google/python-fire) package.
 
+* [Basic usage](#basic-usage)
+* [With options / flags](#with-options--flags)
+* [Nested commands](#nested-commands)
+
 ## Basic usage
 
 ```golang
