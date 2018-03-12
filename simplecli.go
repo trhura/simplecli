@@ -17,61 +17,63 @@ const OptionPrefix = `--`
 
 // Handle takes a point to a struct and construct a CommandGroup,
 // based on the declared fields & methods of the specified struct.
-func Handle(cmd interface{}) {
-	grp := NewCommandGroup(cmd, programName, programArgs)
-	defer grp.gracefulExit()
+func Handle(command interface{}) {
+	cmdGroup := newCommandGroup(programName, command)
+	defer cmdGroup.gracefulExit()
 
-	grp.handle()
+	cmdGroup.handle(programArgs)
 }
 
 // CommandGroup group commands
 type CommandGroup struct {
-	MainCommand      interface{}
-	CommandName      string
-	CommandArgs      []string
-	SubcommandByName map[string]reflect.Value
-	SubCommandGroups []*CommandGroup
+	command          interface{}
+	commandName      string
+	subCommandByName map[string]reflect.Value
+	subCommandGroups map[string]*CommandGroup
 }
 
-// NewCommandGroup constructs a new command group from a struct
-func NewCommandGroup(cmd interface{}, commandName string, commandArgs []string) *CommandGroup {
-	// Fixme: raise error if not pointer to struct
-	typ := reflect.TypeOf(cmd).Elem()
-	val := reflect.ValueOf(cmd).Elem()
-
-	grp := CommandGroup{MainCommand: cmd}
-	defer grp.gracefulExit()
-
-	// Initialize subcommands with declared methods of cmd.MainCommand struct
-	grp.SubcommandByName = make(map[string]reflect.Value, typ.NumMethod())
-	for i := 0; i < typ.NumMethod(); i++ {
-		method := typ.Method(i)
-		grp.SubcommandByName[method.Name] = val.MethodByName(method.Name)
+// newCommandGroup constructs a new command group from a struct pointer
+func newCommandGroup(name string, ptr interface{}) *CommandGroup {
+	ptrVal := reflect.ValueOf(ptr)
+	if !isPtrToStruct(ptrVal) {
+		panic("The passed interface is not a pointer to a struct.")
 	}
 
-	// Initialize arguments and options
-	grp.CommandName = commandName
-	grp.CommandArgs = make([]string, 0)
+	structVal := reflect.ValueOf(ptr).Elem()
+	structTyp := reflect.TypeOf(ptr).Elem()
 
-	for i := range commandArgs {
-		arg := commandArgs[i]
+	cmdGroup := CommandGroup{
+		command:     ptr,
+		commandName: name,
+	}
 
-		if strings.HasPrefix(arg, OptionPrefix) {
-			// If the argument starts with `--`, parse it as option.
-			option := arg[len(OptionPrefix):]
-			grp.parseOption(option)
-		} else {
-			// TODO: add support for SubCommandGroups
-			grp.CommandArgs = append(grp.CommandArgs, arg)
+	// Initialize subcommands with declared methods of cmd.Command struct
+	cmdGroup.subCommandByName = make(map[string]reflect.Value)
+	for i := 0; i < structVal.NumMethod(); i++ {
+		methodName := structTyp.Method(i).Name
+		lowerName := strings.ToLower(methodName)
+		cmdGroup.subCommandByName[lowerName] = structVal.MethodByName(methodName)
+	}
+
+	// Scan structs fields for possible SubCommands
+	cmdGroup.subCommandGroups = make(map[string]*CommandGroup)
+	for i := 0; i < structVal.NumField(); i++ {
+		fieldTyp := structTyp.Field(i)
+		fieldVal := structVal.Field(i)
+		if isPtrToStruct(fieldVal) {
+			lowerName := strings.ToLower(fieldTyp.Name)
+			cmdGroup.subCommandGroups[lowerName] = newCommandGroup(
+				lowerName, fieldVal.Interface(),
+			)
 		}
 	}
 
-	return &grp
+	return &cmdGroup
 }
 
 func (grp *CommandGroup) gracefulExit() {
-	if r := recover(); r != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", r)
+	if message := recover(); message != nil {
+		fmt.Fprint(os.Stderr, message)
 		fmt.Fprintln(os.Stdout, grp.getHelp())
 		os.Exit(-1)
 	}
@@ -79,7 +81,7 @@ func (grp *CommandGroup) gracefulExit() {
 
 func (grp *CommandGroup) parseOption(option string) {
 	var field reflect.Value
-	var val = reflect.ValueOf(grp.MainCommand).Elem()
+	var reflectedValue = reflect.ValueOf(grp.command).Elem()
 
 	// Parse option=value from string
 	option, value := func() (string, string) {
@@ -92,8 +94,8 @@ func (grp *CommandGroup) parseOption(option string) {
 	}()
 
 	// Make sure there is a struct field with same name as `option`
-	if field = val.FieldByName(strings.Title(option)); !field.IsValid() {
-		message := fmt.Sprintf("The option --%s is not a recongized option", option)
+	if field = reflectedValue.FieldByName(strings.Title(option)); !field.IsValid() {
+		message := fmt.Sprintf("The option --%s is not a recongized option.\n", option)
 		panic(message)
 	}
 
@@ -111,26 +113,43 @@ func (grp *CommandGroup) parseOption(option string) {
 	}
 
 	// Raise error for non-Bool types if no value passed
-	message := fmt.Sprintf("No value passed for option --%s", option)
+	message := fmt.Sprintf("No value passed for option --%s.\n", option)
 	panic(message)
 }
 
-func (grp *CommandGroup) handle() {
+// invoke either relevant method in CommandGroup or chain to SubCommandGroup
+func (grp *CommandGroup) handle(optargs []string) {
 	defer grp.gracefulExit()
 
-	// if no arguments passed
-	if len(grp.CommandArgs) <= 0 {
-		message := fmt.Sprintf("No arguments passed for %s", grp.CommandName)
-		panic(message)
+	var args []string
+	for i, arg := range optargs {
+		// parse options as long as it starts with `--`
+		if strings.HasPrefix(arg, OptionPrefix) {
+			option := arg[len(OptionPrefix):]
+			grp.parseOption(option)
+		} else {
+			args = optargs[i:]
+			break
+		}
 	}
 
-	subCommand := grp.CommandArgs[0]
-	commandArgs := grp.CommandArgs[1:]
+	// if no arguments passed
+	if len(args) <= 0 {
+		panic("")
+	}
+
+	subcmd := args[0]
+	subargs := args[1:]
+
+	if subgrp, ok := grp.subCommandGroups[subcmd]; ok {
+		subgrp.handle(subargs)
+		return
+	}
 
 	// Check whether there is corresponding receiver method for subCommand
-	method, ok := grp.SubcommandByName[strings.Title(subCommand)]
+	method, ok := grp.subCommandByName[subcmd]
 	if !ok {
-		message := fmt.Sprintf(" %s is not a valid command.", subCommand)
+		message := fmt.Sprintf(" %s is not a valid command for %s.\n", subcmd, grp.commandName)
 		panic(message)
 	}
 
@@ -138,85 +157,94 @@ func (grp *CommandGroup) handle() {
 	methodType := method.Type()
 	methodArgs := make([]reflect.Value, methodType.NumIn())
 
-	if len(commandArgs) != len(methodArgs) {
-		message := fmt.Sprintf("%s requires %d argument(s).",
-			subCommand,
+	if len(subargs) != len(methodArgs) {
+		message := fmt.Sprintf("%s requires %d argument(s).\n",
+			subcmd,
 			methodType.NumIn())
 		panic(message)
 	}
 
 	for i := 0; i < methodType.NumIn(); i++ {
-		argI := methodType.In(i)
-		methodArgs[i] = grp.parseAs(commandArgs[i], argI.Kind())
+		argIn := methodType.In(i)
+		methodArgs[i] = grp.parseAs(subargs[i], argIn.Kind())
 	}
 
 	method.Call(methodArgs)
 }
 
-func (grp *CommandGroup) parseAs(val string, kind reflect.Kind) reflect.Value {
+// parse cli arg (string) to specific golang type
+func (grp *CommandGroup) parseAs(arg string, kind reflect.Kind) reflect.Value {
 	switch kind {
 
 	case reflect.String:
-		return reflect.ValueOf(val)
+		return reflect.ValueOf(arg)
 
 	case reflect.Int:
-		num, err := strconv.ParseInt(val, 10, 32)
+		num, err := strconv.ParseInt(arg, 10, 32)
 		if err != nil {
-			message := fmt.Sprintf("%s is not a valid number.", val)
+			message := fmt.Sprintf("%s is not a valid number.\n", arg)
 			panic(message)
 		}
 		return reflect.ValueOf(int(num))
 
 	case reflect.Bool:
-		bool, err := strconv.ParseBool(val)
+		bool, err := strconv.ParseBool(arg)
 		if err != nil {
-			message := fmt.Sprintf("%s is not a valid bool.", val)
+			message := fmt.Sprintf("%s is not a valid bool.\n", arg)
 			panic(message)
 		}
 		return reflect.ValueOf(bool)
 
 	default:
-		message := fmt.Sprintf("Argument type %s is currently not supported yet.", kind)
+		message := fmt.Sprintf("Argument type %s is currently not suppotyped yet.\n", kind)
 		panic(message)
 	}
 }
 
 func (grp *CommandGroup) getHelp() string {
-	typ := reflect.TypeOf(grp.MainCommand).Elem()
-	val := reflect.ValueOf(grp.MainCommand).Elem()
+	typ := reflect.TypeOf(grp.command).Elem()
+	val := reflect.ValueOf(grp.command).Elem()
 
-	var prognInfo string
-	hasOptions := val.NumField() > 0
+	var programInfo string
+	hasOptions := val.NumField()-len(grp.subCommandGroups) > 0
+
 	if hasOptions {
-		prognInfo = fmt.Sprintf("Usage: %s [options] ", programName)
+		programInfo = fmt.Sprintf("Usage: %s [options] ", grp.commandName)
 	} else {
-		prognInfo = fmt.Sprintf("Usage: %s ", programName)
+		programInfo = fmt.Sprintf("Usage: %s ", grp.commandName)
 	}
 
-	whitespaces := strings.Repeat(" ", len(prognInfo))
-	cmdDescriptions := make([]string, 0, len(grp.SubcommandByName))
-	for k, m := range grp.SubcommandByName {
-		args := m.Type().String()
-		desc := fmt.Sprintf("%s %s", strings.ToLower(k), args[4:])
-		cmdDescriptions = append(cmdDescriptions, desc)
+	indentation := strings.Repeat(" ", len(programInfo))
+	descriptions := make([]string, 0, len(grp.subCommandByName))
+
+	for name, cmd := range grp.subCommandByName {
+		args := cmd.Type().String()[4:] // 4 is the magic number to strip `Func`
+		desc := fmt.Sprintf("%s %s", name, args)
+		descriptions = append(descriptions, desc)
 	}
 
-	cmdHelp := strings.Join(cmdDescriptions, "\n"+whitespaces)
-	help := prognInfo + cmdHelp
+	for name := range grp.subCommandGroups {
+		desc := fmt.Sprintf("%s ...", name)
+		descriptions = append(descriptions, desc)
+	}
+
+	help := programInfo + strings.Join(descriptions, "\n"+indentation)
 
 	if hasOptions {
-		whitespaces = strings.Repeat(" ", 4)
+		indentation = strings.Repeat(" ", 4)
 		optDescriptions := make([]string, 0, typ.NumField())
 
 		for i := 0; i < typ.NumField(); i++ {
-			desc := fmt.Sprintf(
-				"%s--%-10s %6s   %s",
-				whitespaces,
-				strings.ToLower(typ.Field(i).Name),
-				typ.Field(i).Type,
-				typ.Field(i).Tag,
-			)
-			optDescriptions = append(optDescriptions, desc)
+			if !isPtrToStruct(val.Field(i)) {
+				desc := fmt.Sprintf(
+					"%s--%-10s %6s   %s",
+					indentation,
+					strings.ToLower(typ.Field(i).Name),
+					typ.Field(i).Type,
+					typ.Field(i).Tag,
+				)
+				optDescriptions = append(optDescriptions, desc)
+			}
 		}
 
 		optHelp := strings.Join(optDescriptions, "\n")
@@ -224,4 +252,9 @@ func (grp *CommandGroup) getHelp() string {
 	}
 
 	return help
+}
+
+// return whether the value is a pointer to a struct
+func isPtrToStruct(v reflect.Value) bool {
+	return v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct
 }
