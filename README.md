@@ -59,7 +59,7 @@ thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc add 3 4
 ```
 
 
-## With Options & flags
+## With options / flags
 
 ```golang
 package main
@@ -127,7 +127,7 @@ thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc --verbose -
 1 + 2 = 3
 ```
 
-## Nested Commands
+## Nested commands
 
 ```go
 package main
@@ -154,7 +154,7 @@ func (db Database) Drop() {
 
 // App ...
 type App struct {
-	Database *Database
+	Database *Database	// needs to be a pointer
 	Port     int `server port `
 }
 
