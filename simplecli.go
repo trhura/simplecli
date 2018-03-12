@@ -205,9 +205,10 @@ func (grp *CommandGroup) getHelp() string {
 	typ := reflect.TypeOf(grp.command).Elem()
 	val := reflect.ValueOf(grp.command).Elem()
 
-	var programInfo string
-	hasOptions := val.NumField()-len(grp.subCommandGroups) > 0
+	numOptions := val.NumField() - len(grp.subCommandGroups)
+	hasOptions := numOptions > 0
 
+	var programInfo string
 	if hasOptions {
 		programInfo = fmt.Sprintf("Usage: %s [options] ", grp.commandName)
 	} else {
@@ -231,24 +232,20 @@ func (grp *CommandGroup) getHelp() string {
 	help := programInfo + strings.Join(descriptions, "\n"+indentation)
 
 	if hasOptions {
-		indentation = strings.Repeat(" ", 4)
-		optDescriptions := make([]string, 0, typ.NumField())
+		indentation = strings.Repeat(" ", 7)
+		descriptions := make([]string, 0, numOptions)
 
 		for i := 0; i < typ.NumField(); i++ {
 			if !isPtrToStruct(val.Field(i)) {
-				desc := fmt.Sprintf(
-					"%s--%-10s %6s   %s",
-					indentation,
-					strings.ToLower(typ.Field(i).Name),
-					typ.Field(i).Type,
-					typ.Field(i).Tag,
-				)
-				optDescriptions = append(optDescriptions, desc)
+				field := typ.Field(i)
+				format := "%s --%s (%s)		`%s`"
+				desc := fmt.Sprintf(format, indentation, strings.ToLower(field.Name), field.Type, field.Tag)
+				descriptions = append(descriptions, desc)
 			}
 		}
 
-		optHelp := strings.Join(optDescriptions, "\n")
-		help = help + "\nOptions:\n" + optHelp
+		options := "Options:\n" + strings.Join(descriptions, "\n")
+		help = help + "\n" + options
 	}
 
 	return help

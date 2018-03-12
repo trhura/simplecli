@@ -7,7 +7,7 @@ import (
 
 // Database ...
 type Database struct {
-	Path string
+	Path string `database url path`
 }
 
 // Create database
@@ -23,7 +23,7 @@ func (db Database) Drop() {
 // App ...
 type App struct {
 	Database *Database
-	Port     int
+	Port     int `server port `
 }
 
 // Start the app
