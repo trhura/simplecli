@@ -207,6 +207,6 @@ Listening app at 80.
 ```
 
 ```sh
-go build examples/nested/app.go && ./app --port=80 database --path=dburl create
+thurahlaing @ simplecli > go build examples/nested/app.go && ./app --port=80 database --path=dburl create
 Creating database.
 ```
