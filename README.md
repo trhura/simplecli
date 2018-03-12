@@ -27,39 +27,39 @@ func main() {
 }
 ```
 
-### Example CLI usage
+### CLI usage
 
 ```sh
-thurahlaing @ simplecli > go build calc.go && ./calc
+thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc
 Usage: ./calc add (int, int)
               multiply (int, int)
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc divide
+thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc divide
 Error:  divide is not a valid command.
 ...
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc add 3
+thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc add 3
 Error: add requires 2 argument(s).
 ...
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc add 3 as
+thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc add 3 as
 Error: as is not a valid number.
 ...
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc add 3 4
+thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc add 3 4
 7
 ```
 
 
-## Advanced usage (with options / flags)
+## With Options & flags
 
 ```golang
 package main
@@ -101,7 +101,7 @@ func main() {
 }
 ```
 
-### Example CLI Usage
+### CLI Usage
 
 ```sh
 thurahlaing @ simplecli > go build examples/calc.go && ./calc
@@ -113,16 +113,100 @@ Options:
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc add 01 10
+thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc add 01 10
 11
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc --verbose add 01 10
+thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc --verbose add 01 10
 1 + 10 = 11
 ```
 
 ```sh
-thurahlaing @ simplecli > go build main/calc.go && ./calc --verbose --base=2 add 01 10
+thurahlaing @ simplecli > go build examples/simple/calc.go && ./calc --verbose --base=2 add 01 10
 1 + 2 = 3
+```
+
+## Nested Commands
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/trhura/simplecli"
+)
+
+// Database ...
+type Database struct {
+	Path string `database url path`
+}
+
+// Create database
+func (db Database) Create() {
+	fmt.Println("Creating database.")
+}
+
+// Drop database
+func (db Database) Drop() {
+	fmt.Println("Dropping database.")
+}
+
+// App ...
+type App struct {
+	Database *Database
+	Port     int `server port `
+}
+
+// Start the app
+func (app App) Start() {
+	fmt.Printf("Listening app at %d.\n", app.Port)
+}
+
+// Reload the app
+func (app App) Reload() {
+	fmt.Println("Reloading app.")
+}
+
+// Kill the app
+func (app App) Kill() {
+	fmt.Println("Stoping app.")
+}
+
+func main() {
+	simplecli.Handle(&App{
+		Database: &Database{},
+		Port:     8080,
+	})
+}
+```
+
+### CLI Usage
+
+```sh
+thurahlaing @ simplecli > go build examples/nested/app.go && ./app
+Usage: ./app [options] kill ()
+                       reload ()
+                       start ()
+                       database ...
+Options:
+        --port (int)		`server port`
+```
+
+```sh
+thurahlaing @ simplecli >  go build examples/nested/app.go && ./app database
+Usage: database [options] drop ()
+                          create ()
+Options:
+        --path (string)		`database url path`
+```
+
+```sh
+thurahlaing @ simplecli > go build examples/nested/app.go && ./app --port=80 start
+Listening app at 80.
+```
+
+```sh
+go build examples/nested/app.go && ./app --port=80 database --path=dburl create
+Creating database.
 ```
